@@ -1,4 +1,8 @@
 <?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth.php';
 
@@ -42,12 +46,23 @@ if (isset($_SESSION['user_id'])) {
 
 <?php include __DIR__ . '/includes/header.php'; ?>
 
+<!-- DEBUG INFO - Visible only to admin or when testing -->
+<?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
+<div style="background: #e3f2fd; padding: 10px; margin: 10px; border-radius: 5px; font-size: 12px;">
+    <strong>🔍 DEBUG INFO:</strong><br>
+    Product ID: <?php echo $product_id; ?><br>
+    User Logged In: <?php echo isset($_SESSION['user_id']) ? 'Yes (ID: '.$_SESSION['user_id'].')' : 'No'; ?><br>
+    In Wishlist: <?php echo $in_wishlist ? 'Yes' : 'No'; ?><br>
+    Session Status: <?php echo session_status() === PHP_SESSION_ACTIVE ? 'Active' : 'Not Active'; ?>
+</div>
+<?php endif; ?>
+
 <div class="product-page">
     <div class="container">
         <!-- Breadcrumb navigation -->
         <div class="breadcrumb">
             <a href="index.php">Home</a> > 
-            <a href="index.php#products">Products</a> > 
+            <a href="shop.php">Products</a> > 
             <span><?php echo $product['product_name']; ?></span>
         </div>
 
@@ -65,7 +80,7 @@ if (isset($_SESSION['user_id'])) {
                     <?php endif; ?>
                 </div>
                 
-                <!-- Thumbnail Gallery (you can add more images to database later) -->
+                <!-- Thumbnail Gallery -->
                 <div class="thumbnail-gallery">
                     <div class="thumbnail active" onclick="changeImage(this, '<?php echo $product['image_path']; ?>')">
                         <?php if(!empty($product['image_path'])): ?>
@@ -74,7 +89,6 @@ if (isset($_SESSION['user_id'])) {
                             <div class="thumbnail-placeholder">🎸</div>
                         <?php endif; ?>
                     </div>
-                    <!-- Add more thumbnails here if you have multiple images -->
                 </div>
             </div>
 
@@ -139,14 +153,17 @@ if (isset($_SESSION['user_id'])) {
                             </button>
                         </form>
 
-                        <!-- Wishlist Button -->
+                        <!-- Wishlist Button - FIXED VERSION -->
                         <?php if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin'): ?>
                             <form action="/echo-ember-guitars/wishlist.php" method="POST" class="wishlist-large-form">
                                 <input type="hidden" name="product_id" value="<?php echo $product['product_id']; ?>">
-                                <button type="submit" name="add_to_wishlist" class="btn-wishlist-large <?php echo $in_wishlist ? 'in-wishlist' : ''; ?>">
+                                <input type="hidden" name="add_to_wishlist" value="1">
+                                <button type="submit" name="add_to_wishlist" class="btn-wishlist-large <?php echo $in_wishlist ? 'in-wishlist' : ''; ?>" <?php echo $in_wishlist ? 'disabled' : ''; ?>>
                                     <?php echo $in_wishlist ? '❤️ In Wishlist' : '♡ Add to Wishlist'; ?>
                                 </button>
                             </form>
+                            <!-- Hidden debug info -->
+                            <!-- Form posts to: /echo-ember-guitars/wishlist.php with product_id: <?php echo $product['product_id']; ?> -->
                         <?php endif; ?>
                     <?php else: ?>
                         <div class="login-to-purchase">
@@ -169,7 +186,7 @@ if (isset($_SESSION['user_id'])) {
         </div>
 
         <!-- Related Products Section -->
-        <?php if ($related_products->num_rows > 0): ?>
+        <?php if ($related_products && $related_products->num_rows > 0): ?>
         <div class="related-products-section">
             <h2 class="related-title">You May Also Like</h2>
             <div class="related-products-grid">
@@ -486,7 +503,7 @@ if (isset($_SESSION['user_id'])) {
     transition: all 0.3s;
 }
 
-.btn-wishlist-large:hover {
+.btn-wishlist-large:hover:not(:disabled) {
     background: #ff6b6b;
     color: white;
 }
@@ -494,6 +511,12 @@ if (isset($_SESSION['user_id'])) {
 .btn-wishlist-large.in-wishlist {
     background: #ff6b6b;
     color: white;
+    border-color: #ff6b6b;
+}
+
+.btn-wishlist-large:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .login-to-purchase {

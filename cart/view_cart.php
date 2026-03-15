@@ -11,7 +11,22 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// Fetch cart items with product details
+// Category emoji mapping
+$category_emoji = [
+    'Acoustic' => '🎸',
+    'Electric' => '⚡',
+    'Bass' => '🎸',
+    'Classical' => '🎵',
+    'Amplifier' => '🔊',
+    'Pedal' => '🎛️',
+    'Tool Kit' => '🔧',
+    'Tuner' => '🎵',
+    'Picks' => '⛏️',
+    'Strings' => '🎸',
+    'Accessory' => '🎒'
+];
+
+// Fetch cart items
 $sql = "SELECT c.*, p.product_name, p.price, p.stock, p.image_path, p.category 
         FROM cart c 
         JOIN products p ON c.product_id = p.product_id 
@@ -29,21 +44,6 @@ while ($row = $result->fetch_assoc()) {
     $items[] = $row;
     $total += $row['price'] * $row['quantity'];
 }
-
-// Category emoji fallback
-$category_emoji = [
-    'Acoustic' => '🎸',
-    'Electric' => '⚡',
-    'Bass' => '🎸',
-    'Classical' => '🎵',
-    'Amplifier' => '🔊',
-    'Pedal' => '🎛️',
-    'Tool Kit' => '🔧',
-    'Tuner' => '🎵',
-    'Picks' => '⛏️',
-    'Strings' => '🎸',
-    'Accessory' => '🎒'
-];
 ?>
 
 <?php include __DIR__ . '/../includes/header.php'; ?>
@@ -63,24 +63,13 @@ $category_emoji = [
             <!-- Cart Items -->
             <div class="cart-items">
                 <?php foreach($items as $item): ?>
-                    <div class="cart-item-card">
-                        <!-- Product Image with Fixed Size -->
+                    <div class="cart-item-card" id="cart-item-<?php echo $item['cart_id']; ?>">
+                        <!-- Product Image Container - ADDED BACK -->
                         <div class="cart-image-container">
-                            <?php 
-                            $image_path = !empty($item['image_path']) && file_exists(__DIR__ . '/../' . $item['image_path']) 
-                                        ? '/echo-ember-guitars/' . $item['image_path'] 
-                                        : null;
-                            ?>
-                            <?php if ($image_path): ?>
-                                <img src="<?php echo $image_path; ?>" 
-                                     alt="<?php echo $item['product_name']; ?>"
-                                     class="cart-product-image"
-                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<?php echo $category_emoji[$item['category']] ?? '🎸'; ?>';">
-                            <?php else: ?>
-                                <div class="cart-image-fallback">
-                                    <?php echo $category_emoji[$item['category']] ?? '🎸'; ?>
-                                </div>
-                            <?php endif; ?>
+                            <img src="/echo-ember-guitars/<?php echo $item['image_path']; ?>" 
+                                 alt="<?php echo $item['product_name']; ?>"
+                                 class="cart-product-image"
+                                 onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'cart-image-fallback\'>' + '<?php echo $category_emoji[$item['category']] ?? '🎸'; ?>' + '</div>';">
                         </div>
                         
                         <!-- Item Details -->
@@ -88,27 +77,28 @@ $category_emoji = [
                             <h3><?php echo htmlspecialchars($item['product_name']); ?></h3>
                             <div class="cart-price">₱<?php echo number_format($item['price'], 2); ?></div>
                             
-                            <form action="/echo-ember-guitars/cart/update_cart.php" method="POST" class="cart-actions">
+                            <!-- FIXED FORM WITH JAVASCRIPT FALLBACK -->
+                            <form action="/echo-ember-guitars/cart/update_cart.php" method="POST" class="cart-update-form" id="form-<?php echo $item['cart_id']; ?>">
                                 <input type="hidden" name="cart_id" value="<?php echo $item['cart_id']; ?>">
+                                <input type="hidden" name="action" id="action-<?php echo $item['cart_id']; ?>" value="">
                                 
-                                <div class="cart-quantity">
-                                    <label>Qty:</label>
+                                <div class="cart-controls">
+                                    <label for="qty_<?php echo $item['cart_id']; ?>">Qty:</label>
                                     <input type="number" 
+                                           id="qty_<?php echo $item['cart_id']; ?>" 
                                            name="quantity" 
                                            value="<?php echo $item['quantity']; ?>" 
                                            min="1" 
                                            max="<?php echo $item['stock']; ?>"
-                                           class="qty-field">
-                                </div>
-                                
-                                <div class="cart-buttons">
-                                    <button type="submit" name="update" class="btn-update">↻ Update</button>
-                                    <button type="submit" name="remove" class="btn-remove">✕ Remove</button>
+                                           class="qty-input">
+                                    
+                                    <button type="button" class="btn-update" onclick="submitUpdate(<?php echo $item['cart_id']; ?>)">Update</button>
+                                    <button type="button" class="btn-remove" onclick="submitRemove(<?php echo $item['cart_id']; ?>)">Remove</button>
                                 </div>
                             </form>
                             
                             <div class="cart-subtotal">
-                                Subtotal: <strong>₱<?php echo number_format($item['price'] * $item['quantity'], 2); ?></strong>
+                                Subtotal: <strong id="subtotal-<?php echo $item['cart_id']; ?>">₱<?php echo number_format($item['price'] * $item['quantity'], 2); ?></strong>
                             </div>
                         </div>
                     </div>
@@ -118,22 +108,18 @@ $category_emoji = [
             <!-- Order Summary -->
             <div class="cart-summary">
                 <h3>📋 Order Summary</h3>
-                
                 <div class="summary-line">
                     <span>Subtotal:</span>
-                    <span>₱<?php echo number_format($total, 2); ?></span>
+                    <span id="cart-total">₱<?php echo number_format($total, 2); ?></span>
                 </div>
-                
                 <div class="summary-line">
                     <span>Shipping:</span>
                     <span class="free-badge">FREE</span>
                 </div>
-                
                 <div class="summary-line total-line">
                     <span>Total:</span>
-                    <span>₱<?php echo number_format($total, 2); ?></span>
+                    <span id="cart-total-final">₱<?php echo number_format($total, 2); ?></span>
                 </div>
-                
                 <a href="/echo-ember-guitars/cart/checkout.php" class="checkout-button">Proceed to Checkout →</a>
                 <a href="/echo-ember-guitars/index.php#products" class="continue-button">← Continue Shopping</a>
             </div>
@@ -148,8 +134,27 @@ $category_emoji = [
     <?php endif; ?>
 </div>
 
+<script>
+function submitUpdate(cartId) {
+    const form = document.getElementById('form-' + cartId);
+    const actionInput = document.getElementById('action-' + cartId);
+    actionInput.name = 'update';
+    actionInput.value = '1';
+    form.submit();
+}
+
+function submitRemove(cartId) {
+    if (confirm('Remove this item from cart?')) {
+        const form = document.getElementById('form-' + cartId);
+        const actionInput = document.getElementById('action-' + cartId);
+        actionInput.name = 'remove';
+        actionInput.value = '1';
+        form.submit();
+    }
+}
+</script>
+
 <style>
-/* Cart Layout */
 .cart-layout {
     display: grid;
     grid-template-columns: 1fr 350px;
@@ -157,7 +162,6 @@ $category_emoji = [
     margin-top: 30px;
 }
 
-/* Cart Items */
 .cart-items {
     display: flex;
     flex-direction: column;
@@ -179,7 +183,7 @@ $category_emoji = [
     box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
-/* Fixed Size Image Container */
+/* Image Container Styles */
 .cart-image-container {
     width: 100px;
     height: 100px;
@@ -210,91 +214,91 @@ $category_emoji = [
     color: white;
 }
 
-/* Item Details */
 .cart-item-details {
     flex: 1;
 }
 
 .cart-item-details h3 {
-    font-size: 1.1rem;
     margin: 0 0 5px 0;
     color: #333;
+    font-size: 1.2rem;
 }
 
 .cart-price {
-    font-size: 1rem;
+    font-size: 1.1rem;
     font-weight: 600;
     color: #ff6b6b;
-    margin-bottom: 10px;
+    margin-bottom: 15px;
 }
 
-/* Cart Actions */
-.cart-actions {
+.cart-controls {
     display: flex;
     align-items: center;
-    gap: 15px;
-    margin-bottom: 10px;
+    gap: 10px;
     flex-wrap: wrap;
-}
-
-.cart-quantity {
-    display: flex;
-    align-items: center;
-    gap: 8px;
     background: #f8f9fa;
-    padding: 5px 10px;
+    padding: 10px;
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.cart-controls label {
+    font-weight: 600;
+    color: #555;
+}
+
+.qty-input {
+    width: 60px;
+    padding: 8px;
+    border: 2px solid #ddd;
     border-radius: 6px;
-}
-
-.cart-quantity label {
-    color: #666;
-    font-size: 0.9rem;
-}
-
-.qty-field {
-    width: 50px;
-    padding: 4px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
     text-align: center;
 }
 
-.cart-buttons {
-    display: flex;
-    gap: 8px;
-}
-
 .btn-update {
-    padding: 5px 12px;
+    padding: 8px 16px;
     background: #4CAF50;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.btn-update:hover {
+    background: #45a049;
+    transform: translateY(-2px);
 }
 
 .btn-remove {
-    padding: 5px 12px;
+    padding: 8px 16px;
     background: #ff6b6b;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.btn-remove:hover {
+    background: #ff5252;
+    transform: translateY(-2px);
 }
 
 .cart-subtotal {
-    font-size: 0.95rem;
+    font-size: 1rem;
     color: #666;
+    margin-top: 10px;
 }
 
 .cart-subtotal strong {
     color: #333;
+    font-size: 1.1rem;
     margin-left: 5px;
 }
 
-/* Order Summary */
 .cart-summary {
     background: white;
     padding: 25px;
@@ -303,13 +307,6 @@ $category_emoji = [
     position: sticky;
     top: 100px;
     height: fit-content;
-}
-
-.cart-summary h3 {
-    margin: 0 0 15px 0;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #f0f0f0;
-    color: #333;
 }
 
 .summary-line {
@@ -347,7 +344,7 @@ $category_emoji = [
     text-decoration: none;
     font-weight: 600;
     margin: 20px 0 10px;
-    transition: transform 0.2s;
+    transition: all 0.3s;
 }
 
 .checkout-button:hover {
@@ -363,7 +360,7 @@ $category_emoji = [
     padding: 12px;
     border-radius: 8px;
     text-decoration: none;
-    transition: background 0.2s;
+    transition: all 0.3s;
 }
 
 .continue-button:hover {
@@ -371,7 +368,6 @@ $category_emoji = [
     color: #333;
 }
 
-/* Empty Cart */
 .empty-cart-message {
     text-align: center;
     padding: 60px 20px;
@@ -397,6 +393,44 @@ $category_emoji = [
     margin-bottom: 25px;
 }
 
+/* Dark Mode Support */
+body.dark-mode .cart-item-card {
+    background: #16213e;
+    border-color: #0f3460;
+}
+
+body.dark-mode .cart-item-details h3 {
+    color: #fff;
+}
+
+body.dark-mode .cart-controls {
+    background: #0f3460;
+}
+
+body.dark-mode .cart-controls label {
+    color: #b0b0b0;
+}
+
+body.dark-mode .cart-summary {
+    background: #16213e;
+}
+
+body.dark-mode .cart-summary h3 {
+    color: #fff;
+}
+
+body.dark-mode .empty-cart-message {
+    background: #16213e;
+}
+
+body.dark-mode .empty-cart-message h3 {
+    color: #fff;
+}
+
+body.dark-mode .empty-cart-message p {
+    color: #b0b0b0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .cart-layout {
@@ -420,7 +454,7 @@ $category_emoji = [
         margin-bottom: 10px;
     }
     
-    .cart-actions {
+    .cart-controls {
         justify-content: center;
     }
 }

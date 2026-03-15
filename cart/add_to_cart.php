@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $product_id = (int)($_POST['product_id'] ?? 0);
     $quantity = (int)($_POST['quantity'] ?? 1);
     
-    // Check if product exists
+    // Check if product exists and has stock
     $stmt = $conn->prepare("SELECT * FROM products WHERE product_id = ? AND stock >= ?");
     $stmt->bind_param("ii", $product_id, $quantity);
     $stmt->execute();
@@ -50,11 +50,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['cart_count'] = $count_data['total'] ?? 0;
         
         $_SESSION['success'] = "Product added to cart!";
-        header('Location: /echo-ember-guitars/cart/view_cart.php');
+        
+        // Check if we came from wishlist
+        if (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'wishlist.php') !== false) {
+            header('Location: /echo-ember-guitars/wishlist.php');
+        } else {
+            header('Location: /echo-ember-guitars/cart/view_cart.php');
+        }
         exit();
     } else {
-        $_SESSION['error'] = "Product not available!";
-        header('Location: /echo-ember-guitars/index.php');
+        $_SESSION['error'] = "Product not available or out of stock!";
+        header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '/echo-ember-guitars/index.php'));
         exit();
     }
 } else {
